@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BeastStore | Panel de Administración</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script><script>
+        // ==================== CHARTS ====================
+        function initCharts() {
+            const orders = JSON.parse(localStorage.getItem('beaststore_orders')) || [];
+
+            // Sales Chart (Line)
+            const salesCtx = document.getElementById('salesChart');
+            if (salesCtx) {
+                const days = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+                const salesData = days.map(() => Math.floor(Math.random() * 500) + 100);
+
+                new Chart(salesCtx, {
+                    type: 'line',
+                    data: {
+                        labels: days,
+                        datasets: [{
+                            label: 'Ventas ($)',
+                            data: salesData,
+                            borderColor: '#00ff88',
+                            backgroundColor: 'rgba(0,255,136,0.1)',
+                            borderWidth: 3,
+                            tension: 0.4,
+                            fill: true,
+                            pointBackgroundColor: '#00ff88',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2,
+                            pointRadius: 5
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8a8ea8' } },
+                            x: { grid: { display: false }, ticks: { color: '#8a8ea8' } }
+                        }
+                    }
+                });
+            }
+
+            // Genre Chart (Doughnut)
+            const genreCtx = document.getElementById('genreChart');
+            if (genreCtx) {
+                new Chart(genreCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Trap', 'Reggaeton', 'R&B', 'Corrido', 'Otros'],
+                        datasets: [{
+                            data: [35, 25, 20, 15, 5],
+                            backgroundColor: ['#00ff88', '#9d4edd', '#00b4d8', '#ff007f', '#8a8ea8'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { position: 'bottom', labels: { color: '#8a8ea8', padding: 20 } }
+                        },
+                        cutout: '65%'
+                    }
+                });
+            }
+        }
+
+        // ==================== CUSTOMERS ====================
+        function loadCustomers() {
+            const orders = JSON.parse(localStorage.getItem('beaststore_orders')) || [];
+            const customers = {};
+
+            orders.forEach(order => {
+                if (order.email) {
+                    if (!customers[order.email]) {
+                        customers[order.email] = {
+                            name: order.customer || 'Cliente',
+                            email: order.email,
+                            orders: 0,
+                            total: 0
+                        };
+                    }
+                    customers[order.email].orders++;
+                    customers[order.email].total += order.total || 0;
+                }
+            });
+
+            window.allCustomers = Object.values(customers);
+            renderCustomers(window.allCustomers);
+        }
+
+        function renderCustomers(customers) {
+            const container = document.getElementById('customers-list');
+            if (customers.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--muted);"><i class="fa-solid fa-users" style="font-size: 32px; display: block; margin-bottom: 15px; opacity: 0.5;"></i>No hay clientes registrados aún</div>';
+                return;
+            }
+
+            container.innerHTML = customers.map(c => `
+                <div class="customer-card">
+                    <div class="customer-avatar">${c.name.charAt(0).toUpperCase()}</div>
+                    <div class="customer-info" style="flex: 1;">
+                        <h4>${c.name}</h4>
+                        <p>${c.email}</p>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 14px; font-weight: 700; color: var(--neon-green);">$${c.total.toFixed(2)}</div>
+                        <div style="font-size: 12px; color: var(--muted);">${c.orders} orden(es)</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function filterCustomers() {
+            const search = document.getElementById('customer-search').value.toLowerCase();
+            if (!window.allCustomers) return;
+            const filtered = window.allCustomers.filter(c => 
+                c.name.toLowerCase().includes(search) || 
+                c.email.toLowerCase().includes(search)
+            );
+            renderCustomers(filtered);
+        }
+
+        // ==================== EXPORT & BACKUP ====================
+        function exportBeatsCSV() {
+            const beats = JSON.parse(localStorage.getItem('beaststore_admin_beats')) || [];
+            if (beats.length === 0) { showToast('No hay beats para exportar', 'error'); return; }
+
+            let csv = 'ID,Titulo,Artista,Genero,BPM,Escala,Precio,Fecha\n';
+            beats.forEach(b => {
+                csv += `${b.id},"${b.title}","${b.artist}",${b.genre},${b.bpm},${b.key},${b.basePrice},${b.uploadedAt || 'N/A'}\n`;
+            });
+
+            downloadFile(csv, 'beaststore_beats.csv', 'text/csv');
+            showToast('Beats exportados correctamente', 'success');
+        }
+
+        function exportOrdersCSV() {
+            const orders = JSON.parse(localStorage.getItem('beaststore_orders')) || [];
+            if (orders.length === 0) { showToast('No hay órdenes para exportar', 'error'); return; }
+
+            let csv = 'Orden,Cliente,Email,Items,Total,Metodo,Estado,Fecha\n';
+            orders.forEach(o => {
+                csv += `${o.id},"${o.customer || ''}","${o.email || ''}",${o.items || 0},${o.total || 0},${o.paymentMethod || ''},${o.status || ''},${o.date || ''}\n`;
+            });
+
+            downloadFile(csv, 'beaststore_orders.csv', 'text/csv');
+            showToast('Órdenes exportadas correctamente', 'success');
+        }
+
+        function backupAllData() {
+            const data = {
+                beats: JSON.parse(localStorage.getItem('beaststore_admin_beats')) || [],
+                orders: JSON.parse(localStorage.getItem('beaststore_orders')) || [],
+                cart: JSON.parse(localStorage.getItem('beaststore_cart')) || [],
+                backupDate: new Date().toISOString()
+            };
+
+            const json = JSON.stringify(data, null, 2);
+            downloadFile(json, `beaststore_backup_${new Date().toISOString().split('T')[0]}.json`, 'application/json');
+            showToast('Backup completado', 'success');
+        }
+
+        function restoreData(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data.beats) localStorage.setItem('beaststore_admin_beats', JSON.stringify(data.beats));
+                    if (data.orders) localStorage.setItem('beaststore_orders', JSON.stringify(data.orders));
+                    if (data.cart) localStorage.setItem('beaststore_cart', JSON.stringify(data.cart));
+
+                    loadBeats();
+                    loadOrders();
+                    loadStats();
+                    loadCustomers();
+                    showToast('Datos restaurados correctamente', 'success');
+                } catch (err) {
+                    showToast('Error al restaurar: archivo inválido', 'error');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function downloadFile(content, filename, type) {
+            const blob = new Blob([content], { type });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // ==================== THEME ====================
+        function toggleTheme() {
+            document.body.classList.toggle('light-mode');
+            const isLight = document.body.classList.contains('light-mode');
+            localStorage.setItem('beaststore_theme', isLight ? 'light' : 'dark');
+            document.getElementById('theme-toggle').innerHTML = isLight ? '<i class="fa-solid fa-moon"></i>' : '<i class="fa-solid fa-sun"></i>';
+        }
+
+        // Load saved theme
+        if (localStorage.getItem('beaststore_theme') === 'light') {
+            document.body.classList.add('light-mode');
+        }
+
+        // ==================== SEARCH BEATS ====================
+        function filterBeats() {
+            const search = document.getElementById('beats-search')?.value.toLowerCase() || '';
+            const beats = JSON.parse(localStorage.getItem('beaststore_admin_beats')) || [];
+            const filtered = beats.filter(b => 
+                b.title.toLowerCase().includes(search) || 
+                b.artist.toLowerCase().includes(search) ||
+                b.genre.toLowerCase().includes(search)
+            );
+            renderBeatsTable(filtered);
+        }
+
+        function renderBeatsTable(beats) {
+            const tbody = document.getElementById('beats-table-body');
+            if (beats.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--muted);">No hay beats</td></tr>';
+                return;
+            }
+            tbody.innerHTML = beats.slice().reverse().map(beat => `
+                <tr>
+                    <td><div class="beat-title-cell"><img src="${beat.cover}" class="beat-thumb" alt="${beat.title}"><div><h4>${beat.title}</h4><p>${beat.artist}</p></div></div></td>
+                    <td><span class="tag">${beat.genre}</span></td>
+                    <td>${beat.bpm}</td>
+                    <td>${beat.key}</td>
+                    <td style="color: var(--neon-green); font-weight: 700;">$${beat.basePrice.toFixed(2)}</td>
+                    <td><span style="font-size: 11px; color: var(--muted);">${beat.fileName || 'N/A'} (${beat.fileSize || 'N/A'})</span></td>
+                    <td><button class="btn btn-danger" onclick="deleteBeat(${beat.id})" style="padding: 8px 12px; font-size: 12px;"><i class="fa-solid fa-trash"></i></button></td>
+                </tr>
+            `).join('');
+        }
+
+        // ==================== NOTIFICATIONS ====================
+        function checkNewOrders() {
+            const orders = JSON.parse(localStorage.getItem('beaststore_orders')) || [];
+            const lastCheck = parseInt(localStorage.getItem('beaststore_last_check') || '0');
+            const newOrders = orders.filter(o => o.id > lastCheck);
+
+            if (newOrders.length > 0) {
+                showToast(`🛒 ${newOrders.length} nueva(s) orden(es) recibida(s)!`, 'success');
+                localStorage.setItem('beaststore_last_check', String(Math.max(...orders.map(o => o.id), 0)));
+            }
+        }
+
+        // Check for new orders every 30 seconds
+        setInterval(checkNewOrders, 30000);
+</script>
+    <style>
+        :root {
+            --bg: #030308; --space-dark: #070714; --galaxy-surface: #0f0c24; --card-cyber: #141033;
+            --neon-green: #00ff88; --neon-purple: #9d4edd; --neon-blue: #00b4d8; --neon-pink: #ff007f;
+            --glow-green: rgba(0,255,136,0.25); --glow-purple: rgba(157,78,221,0.3);
+            --text: #f0f2f5; --muted: #8a8ea8; --border-neon: #241b4e;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; }
+        body { background: radial-gradient(circle at 50% 0%, #160f33 0%, #060514 50%, var(--bg) 100%); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+
+        /* LOGIN SCREEN */
+        .login-screen { position: fixed; inset: 0; background: radial-gradient(circle at 50% 0%, #160f33 0%, #060514 50%, var(--bg) 100%); display: flex; align-items: center; justify-content: center; z-index: 10000; }
+        .login-box { background: linear-gradient(145deg, var(--card-cyber), #09071a); border: 1px solid var(--border-neon); border-radius: 24px; padding: 50px; width: 100%; max-width: 420px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+        .login-box i { font-size: 48px; color: var(--neon-purple); margin-bottom: 20px; filter: drop-shadow(0 0 15px var(--neon-purple)); }
+        .login-box h2 { font-size: 24px; margin-bottom: 8px; }
+        .login-box p { color: var(--muted); font-size: 14px; margin-bottom: 30px; }
+        .login-box input { width: 100%; background: rgba(3,3,8,0.6); border: 1px solid var(--border-neon); color: white; padding: 14px 16px; border-radius: 12px; font-size: 14px; outline: none; margin-bottom: 16px; transition: 0.3s; }
+        .login-box input:focus { border-color: var(--neon-blue); box-shadow: 0 0 15px rgba(0,180,216,0.2); }
+        .login-box button { width: 100%; background: linear-gradient(135deg, var(--neon-green), var(--neon-blue)); color: #000; border: none; padding: 14px; border-radius: 12px; font-weight: 700; font-size: 15px; cursor: pointer; transition: 0.3s; }
+        .login-box button:hover { transform: translateY(-2px); box-shadow: 0 6px 30px rgba(0,255,136,0.4); }
+
+        /* ADMIN PANEL */
+        .admin-panel { display: none; padding: 40px; max-width: 1400px; margin: 0 auto; }
+        .admin-panel.active { display: block; animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 1px solid var(--border-neon); }
+        .admin-header h1 { font-size: 28px; display: flex; align-items: center; gap: 12px; }
+        .admin-header h1 i { color: var(--neon-green); }
+        .admin-actions { display: flex; gap: 12px; }
+        .btn { padding: 11px 18px; border: none; border-radius: 14px; font-weight: 700; cursor: pointer; transition: all 0.3s ease; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+        .btn-primary { background: linear-gradient(135deg, var(--neon-green), var(--neon-blue)); color: #000; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 30px rgba(0,255,136,0.4); }
+        .btn-outline { background: transparent; border: 1px solid var(--border-neon); color: var(--text); }
+        .btn-outline:hover { border-color: var(--neon-pink); color: var(--neon-pink); }
+        .btn-danger { background: rgba(255,0,127,0.15); border: 1px solid var(--neon-pink); color: var(--neon-pink); }
+        .btn-danger:hover { background: var(--neon-pink); color: #fff; }
+
+        /* STATS CARDS */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 40px; }
+        .stat-card { background: linear-gradient(145deg, var(--card-cyber), #09071a); padding: 25px; border-radius: 20px; border: 1px solid var(--border-neon); transition: all 0.3s ease; }
+        .stat-card:hover { transform: translateY(-4px); box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+        .stat-card i { font-size: 24px; margin-bottom: 12px; }
+        .stat-card .value { font-size: 28px; font-weight: 800; margin-bottom: 4px; }
+        .stat-card .label { font-size: 13px; color: var(--muted); }
+
+        /* UPLOAD SECTION */
+        .upload-section { background: linear-gradient(145deg, var(--card-cyber), #09071a); border: 1px solid var(--border-neon); border-radius: 24px; padding: 35px; margin-bottom: 40px; }
+        .upload-section h2 { font-size: 20px; margin-bottom: 25px; display: flex; align-items: center; gap: 10px; }
+        .upload-section h2 i { color: var(--neon-green); }
+
+        .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
+        @media (max-width: 768px) { .upload-grid { grid-template-columns: 1fr; } }
+
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 8px; font-weight: 600; }
+        .form-group input, .form-group select { width: 100%; background: rgba(3,3,8,0.6); border: 1px solid var(--border-neon); color: white; padding: 12px 16px; border-radius: 12px; font-size: 14px; outline: none; transition: 0.3s; }
+        .form-group input:focus, .form-group select:focus { border-color: var(--neon-blue); box-shadow: 0 0 15px rgba(0,180,216,0.2); }
+        .form-group input::placeholder { color: var(--muted); opacity: 0.6; }
+
+        /* FILE UPLOAD */
+        .file-upload { border: 2px dashed var(--border-neon); border-radius: 16px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.3s ease; position: relative; }
+        .file-upload:hover, .file-upload.dragover { border-color: var(--neon-green); background: rgba(0,255,136,0.05); }
+        .file-upload i { font-size: 36px; color: var(--neon-green); margin-bottom: 12px; }
+        .file-upload h3 { font-size: 16px; margin-bottom: 8px; }
+        .file-upload p { font-size: 13px; color: var(--muted); }
+        .file-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+        .file-upload.has-file { border-color: var(--neon-green); background: rgba(0,255,136,0.08); }
+        .file-upload.has-file i { color: var(--neon-green); }
+        .file-upload.has-file h3 { color: var(--neon-green); }
+
+        /* AUDIO PREVIEW */
+        .audio-preview { margin-top: 20px; display: none; }
+        .audio-preview.active { display: block; }
+        .audio-preview audio { width: 100%; border-radius: 12px; }
+        .audio-info { display: flex; gap: 15px; margin-top: 12px; flex-wrap: wrap; }
+        .audio-info span { background: rgba(157,78,221,0.1); padding: 6px 14px; border-radius: 10px; font-size: 12px; color: var(--neon-purple); border: 1px solid rgba(157,78,221,0.2); }
+
+        /* BEATS LIST */
+        .beats-section { background: linear-gradient(145deg, var(--card-cyber), #09071a); border: 1px solid var(--border-neon); border-radius: 24px; padding: 35px; }
+        .beats-section h2 { font-size: 20px; margin-bottom: 25px; display: flex; align-items: center; gap: 10px; }
+        .beats-section h2 i { color: var(--neon-blue); }
+
+        .beats-table { width: 100%; border-collapse: collapse; }
+        .beats-table th { text-align: left; padding: 14px 16px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border-neon); }
+        .beats-table td { padding: 16px; border-bottom: 1px solid rgba(36,27,78,0.5); font-size: 14px; }
+        .beats-table tr:hover td { background: rgba(157,78,221,0.05); }
+        .beat-thumb { width: 48px; height: 48px; border-radius: 12px; object-fit: cover; }
+        .beat-title-cell { display: flex; align-items: center; gap: 12px; }
+        .beat-title-cell div h4 { font-size: 14px; margin-bottom: 2px; }
+        .beat-title-cell div p { font-size: 12px; color: var(--muted); }
+        .tag { background: rgba(157,78,221,0.15); padding: 4px 10px; border-radius: 8px; font-size: 11px; color: var(--neon-purple); border: 1px solid rgba(157,78,221,0.3); }
+        .tag-green { background: rgba(0,255,136,0.1); color: var(--neon-green); border-color: rgba(0,255,136,0.3); }
+
+        /* TOAST */
+        .toast-container { position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; }
+        .toast { background: rgba(20,16,51,0.95); backdrop-filter: blur(10px); border: 1px solid var(--border-neon); padding: 14px 20px; border-radius: 14px; display: flex; align-items: center; gap: 12px; animation: toastIn 0.3s ease-out; box-shadow: 0 10px 30px rgba(0,0,0,0.4); }
+        .toast.success { border-color: var(--neon-green); } .toast.error { border-color: var(--neon-pink); }
+        .toast i { font-size: 18px; } .toast.success i { color: var(--neon-green); } .toast.error i { color: var(--neon-pink); }
+        @keyframes toastIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* WAVEFORM */
+        .waveform-container { height: 60px; background: rgba(3,3,8,0.6); border-radius: 12px; margin-top: 15px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+        .waveform-bars { display: flex; align-items: center; gap: 3px; height: 40px; }
+        .waveform-bar { width: 4px; background: linear-gradient(to top, var(--neon-purple), var(--neon-blue)); border-radius: 2px; transition: height 0.3s ease; }
+    
+        /* CHARTS */
+        .chart-container { background: linear-gradient(145deg, var(--card-cyber), #09071a); border: 1px solid var(--border-neon); border-radius: 20px; padding: 25px; margin-bottom: 30px; }
+        .chart-container h3 { font-size: 16px; margin-bottom: 20px; color: var(--muted); }
+        .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 25px; margin-bottom: 40px; }
+
+        /* CUSTOMERS */
+        .customer-card { display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(20,16,51,0.4); border-radius: 12px; border: 1px solid var(--border-neon); margin-bottom: 10px; }
+        .customer-avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, var(--neon-purple), var(--neon-pink)); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; }
+        .customer-info h4 { font-size: 14px; margin-bottom: 2px; }
+        .customer-info p { font-size: 12px; color: var(--muted); }
+
+        /* SEARCH & FILTERS */
+        .search-bar { background: rgba(20,16,51,0.6); border: 1px solid var(--border-neon); padding: 10px 16px; border-radius: 12px; display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+        .search-bar input { background: transparent; border: none; color: white; width: 100%; font-size: 14px; outline: none; }
+        .search-bar input::placeholder { color: var(--muted); }
+
+        /* EXPORT BUTTONS */
+        .export-btn { background: rgba(0,180,216,0.1); border: 1px solid var(--neon-blue); color: var(--neon-blue); padding: 8px 16px; border-radius: 10px; font-size: 12px; cursor: pointer; transition: 0.3s; font-weight: 600; }
+        .export-btn:hover { background: var(--neon-blue); color: #000; }
+
+        /* THEME TOGGLE */
+        .theme-toggle { position: fixed; top: 20px; right: 20px; z-index: 10001; width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, var(--neon-purple), var(--neon-pink)); border: none; color: #fff; font-size: 18px; cursor: pointer; box-shadow: 0 4px 15px rgba(157,78,221,0.4); transition: 0.3s; }
+        .theme-toggle:hover { transform: scale(1.1); }
+
+        /* NOTIFICATIONS */
+        .notification-badge { position: absolute; top: -5px; right: -5px; width: 18px; height: 18px; background: var(--neon-pink); border-radius: 50%; font-size: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+
+        /* BACKUP SECTION */
+        .backup-section { background: linear-gradient(145deg, var(--card-cyber), #09071a); border: 1px solid var(--border-neon); border-radius: 20px; padding: 25px; margin-top: 40px; }
+        .backup-section h2 { font-size: 20px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+        .backup-section h2 i { color: var(--neon-purple); }
+        .backup-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; }
+        .backup-card { padding: 20px; background: rgba(3,3,8,0.4); border-radius: 16px; border: 1px solid var(--border-neon); text-align: center; cursor: pointer; transition: 0.3s; }
+        .backup-card:hover { border-color: var(--neon-green); transform: translateY(-3px); }
+        .backup-card i { font-size: 28px; margin-bottom: 10px; color: var(--neon-green); }
+        .backup-card h4 { font-size: 14px; margin-bottom: 5px; }
+        .backup-card p { font-size: 12px; color: var(--muted); }
+
+        /* PAGINATION */
+        .pagination { display: flex; gap: 8px; justify-content: center; margin-top: 20px; }
+        .page-btn { padding: 8px 14px; background: rgba(20,16,51,0.6); border: 1px solid var(--border-neon); border-radius: 10px; color: var(--text); cursor: pointer; transition: 0.3s; font-size: 13px; }
+        .page-btn:hover, .page-btn.active { background: linear-gradient(135deg, var(--neon-purple), var(--neon-blue)); border-color: transparent; color: #fff; }
+
+        /* LIGHT MODE */
+        body.light-mode { background: linear-gradient(135deg, #f0f2f5 0%, #e8eaf0 100%); color: #1a1a2e; }
+        body.light-mode .stat-card, body.light-mode .upload-section, body.light-mode .beats-section, body.light-mode .chart-container, body.light-mode .backup-section { background: #fff; border-color: #e0e0e0; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        body.light-mode .form-group input, body.light-mode .form-group select { background: #f8f9fa; border-color: #e0e0e0; color: #1a1a2e; }
+        body.light-mode .search-bar { background: #f8f9fa; border-color: #e0e0e0; }
+        body.light-mode .search-bar input { color: #1a1a2e; }
+        body.light-mode .beats-table tr:hover td { background: rgba(0,0,0,0.03); }
+        body.light-mode .customer-card { background: #f8f9fa; border-color: #e0e0e0; }
+
+    </style>
+<base target="_blank">
+</head>
+<body>
+
+    <!-- LOGIN SCREEN -->
+    <div class="login-screen" id="login-screen">
+        <div class="login-box">
+            <i class="fa-solid fa-shield-halved"></i>
+            <h2>Panel de Administración</h2>
+            <p>Acceso exclusivo para administradores de BeastStore</p>
+            <input type="password" id="admin-pass" placeholder="Contraseña de administrador">
+            <button onclick="adminLogin()"><i class="fa-solid fa-right-to-bracket"></i> Acceder</button>
+        </div>
+    <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()"><i class="fa-solid fa-sun"></i></button>
+    </div>
+
+    <!-- ADMIN PANEL -->
+    <div class="admin-panel" id="admin-panel">
+        <div class="admin-header">
+            <h1><i class="fa-solid fa-shield-halved"></i> BeastStore Admin</h1>
+            <div class="admin-actions">
+                <button class="btn btn-outline" onclick="window.location.href='index.html'"><i class="fa-solid fa-store"></i> Ver Tienda</button>
+                <button class="btn btn-danger" onclick="adminLogout()"><i class="fa-solid fa-right-from-bracket"></i> Salir</button>
+            </div>
+        </div>
+
+        <!-- STATS -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <i class="fa-solid fa-music" style="color: var(--neon-green);"></i>
+                <div class="value" id="stat-total-beats">0</div>
+                <div class="label">Beats Totales</div>
+            </div>
+            <div class="stat-card">
+                <i class="fa-solid fa-cart-shopping" style="color: var(--neon-blue);"></i>
+                <div class="value" id="stat-total-orders">0</div>
+                <div class="label">Ventas</div>
+            </div>
+            <div class="stat-card">
+                <i class="fa-solid fa-dollar-sign" style="color: var(--neon-purple);"></i>
+                <div class="value" id="stat-revenue">$0</div>
+                <div class="label">Ingresos</div>
+            </div>
+            <div class="stat-card">
+                <i class="fa-solid fa-users" style="color: var(--neon-pink);"></i>
+                <div class="value" id="stat-visitors">0</div>
+                <div class="label">Visitantes</div>
+            </div>
+        </div>
+
+        <!-- UPLOAD SECTION -->
+        <div class="upload-section">
+            <h2><i class="fa-solid fa-cloud-arrow-up"></i> Subir Nuevo Beat (WAV)</h2>
+            <div class="upload-grid">
+                <div>
+                    <div class="form-group">
+                        <label>Título del Beat</label>
+                        <input type="text" id="beat-title" placeholder="Ej: Midnight Vibes">
+                    </div>
+                    <div class="form-group">
+                        <label>Artista / Productor</label>
+                        <input type="text" id="beat-artist" placeholder="Ej: BeastProducer">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div class="form-group">
+                            <label>Género</label>
+                            <select id="beat-genre">
+                                <option value="Trap">Trap</option>
+                                <option value="Reggaeton">Reggaeton</option>
+                                <option value="R&B">R&B</option>
+                                <option value="Corrido Tumbado">Corrido Tumbado</option>
+                                <option value="Hip Hop">Hip Hop</option>
+                                <option value="Pop">Pop</option>
+                                <option value="Electrónica">Electrónica</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>BPM</label>
+                            <input type="number" id="beat-bpm" placeholder="140" min="60" max="200">
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div class="form-group">
+                            <label>Escala Musical</label>
+                            <select id="beat-key">
+                                <option value="Cm">Cm</option>
+                                <option value="Am">Am</option>
+                                <option value="Fm">Fm</option>
+                                <option value="Gm">Gm</option>
+                                <option value="Dm">Dm</option>
+                                <option value="Em">Em</option>
+                                <option value="Bm">Bm</option>
+                                <option value="F#m">F#m</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Precio Base ($)</label>
+                            <input type="number" id="beat-price" placeholder="29.99" min="0" step="0.01">
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <!-- AUDIO FILE UPLOAD -->
+                    <div class="form-group">
+                        <label>Archivo de Audio (WAV)</label>
+                        <div class="file-upload" id="audio-dropzone">
+                            <input type="file" id="beat-audio" accept="audio/wav,audio/mpeg,audio/mp3" onchange="handleAudioUpload(this)">
+                            <i class="fa-solid fa-file-audio" id="audio-icon"></i>
+                            <h3 id="audio-title">Arrastra o selecciona archivo WAV</h3>
+                            <p id="audio-desc">Formato: WAV, MP3 | Máx: 50MB</p>
+                        </div>
+                    </div>
+
+                    <!-- AUDIO PREVIEW -->
+                    <div class="audio-preview" id="audio-preview">
+                        <audio id="preview-player" controls></audio>
+                        <div class="audio-info">
+                            <span id="audio-format"><i class="fa-solid fa-file"></i> WAV</span>
+                            <span id="audio-size"><i class="fa-solid fa-weight-hanging"></i> 0 MB</span>
+                            <span id="audio-duration"><i class="fa-solid fa-clock"></i> 0:00</span>
+                        </div>
+                        <!-- WAVEFORM VISUALIZATION -->
+                        <div class="waveform-container" id="waveform">
+                            <div class="waveform-bars" id="waveform-bars"></div>
+                        </div>
+                    </div>
+
+                    <!-- COVER IMAGE UPLOAD -->
+                    <div class="form-group" style="margin-top: 20px;">
+                        <label>Portada del Beat</label>
+                        <div class="file-upload" id="cover-dropzone">
+                            <input type="file" id="beat-cover" accept="image/*" onchange="handleCoverUpload(this)">
+                            <i class="fa-solid fa-image" id="cover-icon"></i>
+                            <h3 id="cover-title">Arrastra o selecciona imagen</h3>
+                            <p id="cover-desc">JPG, PNG | Mín: 400x400px</p>
+                        </div>
+                    </div>
+                    <div id="cover-preview" style="margin-top: 12px; display: none;">
+                        <img id="cover-img" style="width: 100%; max-height: 200px; object-fit: cover; border-radius: 12px; border: 1px solid var(--border-neon);">
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top: 25px; display: flex; gap: 12px;">
+                <button class="btn btn-primary" onclick="uploadBeat()" style="padding: 14px 30px; font-size: 15px;">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> Subir Beat
+                </button>
+                <button class="btn btn-outline" onclick="clearForm()">
+                    <i class="fa-solid fa-rotate-left"></i> Limpiar
+                </button>
+            </div>
+        </div>
+
+        <!-- BEATS LIST -->
+        <div class="beats-section">
+            <h2><i class="fa-solid fa-list"></i> Beats Subidos</h2>
+            <table class="beats-table">
+                <thead>
+                    <tr>
+                        <th>Beat</th>
+                        <th>Género</th>
+                        <th>BPM</th>
+                        <th>Escala</th>
+                        <th>Precio</th>
+                        <th>Audio</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="beats-table-body">
+                    <!-- Dynamic content -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- ORDERS SECTION -->
+        <div class="beats-section" style="margin-top: 40px;">
+            <h2><i class="fa-solid fa-receipt" style="color: var(--neon-green);"></i> Órdenes de Compra</h2>
+            <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
+                <div class="stat-card" style="flex: 1; min-width: 150px;">
+                    <i class="fa-solid fa-bag-shopping" style="color: var(--neon-green);"></i>
+                    <div class="value" id="orders-total-count">0</div>
+                    <div class="label">Total Órdenes
+
+        <!-- CHARTS SECTION -->
+        <div class="chart-grid">
+            <div class="chart-container">
+                <h3><i class="fa-solid fa-chart-line" style="color: var(--neon-green); margin-right: 8px;"></i>Ventas por Semana</h3>
+                <canvas id="salesChart" height="200"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3><i class="fa-solid fa-chart-pie" style="color: var(--neon-purple); margin-right: 8px;"></i>Ventas por Género</h3>
+                <canvas id="genreChart" height="200"></canvas>
+            </div>
+        </div>
+
+        <!-- CUSTOMERS SECTION -->
+        <div class="beats-section" style="margin-top: 40px;">
+            <h2><i class="fa-solid fa-users" style="color: var(--neon-blue);"></i> Clientes</h2>
+            <div class="search-bar">
+                <i class="fa-solid fa-magnifying-glass" style="color: var(--muted);"></i>
+                <input type="text" id="customer-search" placeholder="Buscar clientes por nombre o email..." oninput="filterCustomers()">
+            </div>
+            <div id="customers-list"></div>
+        </div>
+
+        <!-- BACKUP & EXPORT SECTION -->
+        <div class="backup-section">
+            <h2><i class="fa-solid fa-database"></i> Backup & Exportación</h2>
+            <div class="backup-grid">
+                <div class="backup-card" onclick="exportBeatsCSV()">
+                    <i class="fa-solid fa-file-csv"></i>
+                    <h4>Exportar Beats (CSV)</h4>
+                    <p>Descarga todos los beats en formato CSV</p>
+                </div>
+                <div class="backup-card" onclick="exportOrdersCSV()">
+                    <i class="fa-solid fa-file-csv"></i>
+                    <h4>Exportar Órdenes (CSV)</h4>
+                    <p>Descarga todas las órdenes en formato CSV</p>
+                </div>
+                <div class="backup-card" onclick="backupAllData()">
+                    <i class="fa-solid fa-cloud-arrow-down"></i>
+                    <h4>Backup Completo (JSON)</h4>
+                    <p>Guarda todos los datos de la plataforma</p>
+                </div>
+                <div class="backup-card" onclick="document.getElementById('restore-file').click()">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <h4>Restaurar Datos</h4>
+                    <p>Carga un backup JSON previamente guardado</p>
+                    <input type="file" id="restore-file" accept=".json" style="display: none;" onchange="restoreData(this)">
+                </div>
+            </div>
+        </div>
+</div>
+                </div>
+                <div class="stat-card" style="flex: 1; min-width: 150px;">
+                    <i class="fa-solid fa-circle-check" style="color: var(--neon-blue);"></i>
+                    <div class="value" id="orders-completed">0</div>
+                    <div class="label">Completadas</div>
+                </div>
+                <div class="stat-card" style="flex: 1; min-width: 150px;">
+                    <i class="fa-solid fa-money-bill-wave" style="color: var(--neon-purple);"></i>
+                    <div class="value" id="orders-total-revenue">$0.00</div>
+                    <div class="label">Ingresos Totales</div>
+                </div>
+            </div>
+            <table class="beats-table">
+                <thead>
+                    <tr>
+                        <th>Orden #</th>
+                        <th>Cliente</th>
+                        <th>Email</th>
+                        <th>Items</th>
+                        <th>Total</th>
+                        <th>Método de Pago</th>
+                        <th>Estado</th>
+                        <th>Fecha</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="orders-table-body">
+                    <!-- Dynamic content -->
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <div class="toast-container" id="toast-container"></div>
+
+    <script>
+        // ==================== AUTH ====================
+        const ADMIN_PASSWORD = '47896';
+
+        function adminLogin() {
+            const pass = document.getElementById('admin-pass').value;
+            if (pass === ADMIN_PASSWORD) {
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('admin-panel').classList.add('active');
+                localStorage.setItem('beaststore_admin', 'true');
+                loadBeats();
+                loadStats();
+                showToast('Bienvenido al panel de administración', 'success');
+            } else {
+                showToast('Contraseña incorrecta', 'error');
+            }
+        }
+
+        function adminLogout() {
+            localStorage.removeItem('beaststore_admin');
+            document.getElementById('admin-panel').classList.remove('active');
+            document.getElementById('login-screen').style.display = 'flex';
+            document.getElementById('admin-pass').value = '';
+        }
+
+        // Auto-login if session exists
+        if (localStorage.getItem('beaststore_admin') === 'true') {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('admin-panel').classList.add('active');
+        }
+
+        document.getElementById('admin-pass').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') adminLogin();
+        });
+
+        // ==================== FILE UPLOAD HANDLERS ====================
+        let uploadedAudio = null;
+        let uploadedCover = null;
+
+        function handleAudioUpload(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            // Validate file type
+            const validTypes = ['audio/wav', 'audio/x-wav', 'audio/mpeg', 'audio/mp3'];
+            if (!validTypes.includes(file.type) && !file.name.endsWith('.wav') && !file.name.endsWith('.mp3')) {
+                showToast('Formato no válido. Usa WAV o MP3', 'error');
+                return;
+            }
+
+            // Validate size (50MB max)
+            if (file.size > 50 * 1024 * 1024) {
+                showToast('Archivo demasiado grande. Máx: 50MB', 'error');
+                return;
+            }
+
+            uploadedAudio = file;
+
+            // Update UI
+            const dropzone = document.getElementById('audio-dropzone');
+            dropzone.classList.add('has-file');
+            document.getElementById('audio-icon').className = 'fa-solid fa-check-circle';
+            document.getElementById('audio-title').textContent = file.name;
+            document.getElementById('audio-desc').textContent = formatFileSize(file.size);
+
+            // Create preview
+            const url = URL.createObjectURL(file);
+            const player = document.getElementById('preview-player');
+            player.src = url;
+
+            document.getElementById('audio-preview').classList.add('active');
+            document.getElementById('audio-format').innerHTML = '<i class="fa-solid fa-file"></i> ' + file.name.split('.').pop().toUpperCase();
+            document.getElementById('audio-size').innerHTML = '<i class="fa-solid fa-weight-hanging"></i> ' + formatFileSize(file.size);
+
+            // Get duration
+            player.onloadedmetadata = () => {
+                document.getElementById('audio-duration').innerHTML = '<i class="fa-solid fa-clock"></i> ' + formatTime(player.duration);
+            };
+
+            // Generate fake waveform visualization
+            generateWaveform();
+
+            showToast('Audio cargado correctamente', 'success');
+        }
+
+        function handleCoverUpload(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            if (!file.type.startsWith('image/')) {
+                showToast('Selecciona una imagen válida', 'error');
+                return;
+            }
+
+            uploadedCover = file;
+
+            const dropzone = document.getElementById('cover-dropzone');
+            dropzone.classList.add('has-file');
+            document.getElementById('cover-icon').className = 'fa-solid fa-check-circle';
+            document.getElementById('cover-title').textContent = file.name;
+            document.getElementById('cover-desc').textContent = formatFileSize(file.size);
+
+            const url = URL.createObjectURL(file);
+            document.getElementById('cover-img').src = url;
+            document.getElementById('cover-preview').style.display = 'block';
+
+            showToast('Portada cargada correctamente', 'success');
+        }
+
+        // ==================== DRAG & DROP ====================
+        ['audio-dropzone', 'cover-dropzone'].forEach(id => {
+            const zone = document.getElementById(id);
+            zone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                zone.classList.add('dragover');
+            });
+            zone.addEventListener('dragleave', () => {
+                zone.classList.remove('dragover');
+            });
+            zone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                zone.classList.remove('dragover');
+                const input = zone.querySelector('input');
+                input.files = e.dataTransfer.files;
+                input.dispatchEvent(new Event('change'));
+            });
+        });
+
+        // ==================== WAVEFORM VISUALIZATION ====================
+        function generateWaveform() {
+            const container = document.getElementById('waveform-bars');
+            container.innerHTML = '';
+            const barCount = 60;
+
+            for (let i = 0; i < barCount; i++) {
+                const bar = document.createElement('div');
+                bar.className = 'waveform-bar';
+                const height = Math.random() * 30 + 10;
+                bar.style.height = height + 'px';
+                bar.style.opacity = Math.random() * 0.5 + 0.5;
+                container.appendChild(bar);
+            }
+
+            // Animate bars
+            setInterval(() => {
+                const bars = container.querySelectorAll('.waveform-bar');
+                bars.forEach(bar => {
+                    const height = Math.random() * 35 + 5;
+                    bar.style.height = height + 'px';
+                });
+            }, 200);
+        }
+
+        // ==================== UPLOAD BEAT ====================
+        function uploadBeat() {
+            const title = document.getElementById('beat-title').value.trim();
+            const artist = document.getElementById('beat-artist').value.trim();
+            const genre = document.getElementById('beat-genre').value;
+            const bpm = document.getElementById('beat-bpm').value;
+            const key = document.getElementById('beat-key').value;
+            const price = document.getElementById('beat-price').value;
+
+            if (!title || !artist || !bpm || !price) {
+                showToast('Completa todos los campos obligatorios', 'error');
+                return;
+            }
+
+            if (!uploadedAudio) {
+                showToast('Selecciona un archivo de audio WAV', 'error');
+                return;
+            }
+
+            // Create beat object
+            const beat = {
+                id: Date.now(),
+                title,
+                artist,
+                genre,
+                bpm: parseInt(bpm),
+                key,
+                basePrice: parseFloat(price),
+                cover: uploadedCover ? URL.createObjectURL(uploadedCover) : 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=400&h=400&fit=crop',
+                audioUrl: URL.createObjectURL(uploadedAudio),
+                duration: 180,
+                fileName: uploadedAudio.name,
+                fileSize: formatFileSize(uploadedAudio.size),
+                uploadedAt: new Date().toISOString()
+            };
+
+            // Save to localStorage
+            let beats = JSON.parse(localStorage.getItem('beaststore_admin_beats')) || [];
+            beats.push(beat);
+            localStorage.setItem('beaststore_admin_beats', JSON.stringify(beats));
+
+            showToast('¡Beat subido exitosamente!', 'success');
+            clearForm();
+            loadBeats();
+            loadStats();
+        }
+
+        // ==================== LOAD BEATS ====================
+        function loadBeats() {
+            const beats = JSON.parse(localStorage.getItem('beaststore_admin_beats')) || [];
+            const tbody = document.getElementById('beats-table-body');
+
+            if (beats.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--muted);"><i class="fa-solid fa-music" style="font-size: 32px; display: block; margin-bottom: 15px; opacity: 0.5;"></i>No hay beats subidos aún</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = beats.slice().reverse().map(beat => `
+                <tr>
+                    <td>
+                        <div class="beat-title-cell">
+                            <img src="${beat.cover}" class="beat-thumb" alt="${beat.title}">
+                            <div>
+                                <h4>${beat.title}</h4>
+                                <p>${beat.artist}</p>
+                            </div>
+                        </div>
+                    </td>
+                    <td><span class="tag">${beat.genre}</span></td>
+                    <td>${beat.bpm}</td>
+                    <td>${beat.key}</td>
+                    <td style="color: var(--neon-green); font-weight: 700;">$${beat.basePrice.toFixed(2)}</td>
+                    <td>
+                        <audio controls style="width: 150px; height: 30px;" src="${beat.audioUrl}"></audio>
+                        <br><span style="font-size: 11px; color: var(--muted);">${beat.fileName} (${beat.fileSize})</span>
+                    </td>
+                    <td>
+                        <button class="btn btn-danger" onclick="deleteBeat(${beat.id})" style="padding: 8px 12px; font-size: 12px;">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function deleteBeat(id) {
+            if (!confirm('¿Eliminar este beat?')) return;
+            let beats = JSON.parse(localStorage.getItem('beaststore_admin_beats')) || [];
+            beats = beats.filter(b => b.id !== id);
+            localStorage.setItem('beaststore_admin_beats', JSON.stringify(beats));
+            loadBeats();
+            loadStats();
+            showToast('Beat eliminado', 'info');
+        }
+
+        // ==================== STATS ====================
+        function loadStats() {
+            const beats = JSON.parse(localStorage.getItem('beaststore_admin_beats')) || [];
+            const orders = JSON.parse(localStorage.getItem('beaststore_orders')) || [];
+
+            document.getElementById('stat-total-beats').textContent = beats.length;
+            document.getElementById('stat-total-orders').textContent = orders.length;
+
+            const revenue = orders.reduce((sum, o) => sum + (o.total || 0), 0);
+            document.getElementById('stat-revenue').textContent = '$' + revenue.toFixed(2);
+
+            // Fake visitor count based on orders + random
+            document.getElementById('stat-visitors').textContent = orders.length * 12 + Math.floor(Math.random() * 50);
+
+            // Also load orders table
+            loadOrders();
+        }
+
+        // ==================== UTILS ====================
+        
+        // ==================== ORDERS ====================
+        function loadOrders() {
+            const orders = JSON.parse(localStorage.getItem('beaststore_orders')) || [];
+            const tbody = document.getElementById('orders-table-body');
+
+            // Update order stats
+            const completed = orders.filter(o => o.status === 'completed').length;
+            const totalRev = orders.reduce((sum, o) => sum + (o.total || 0), 0);
+
+            document.getElementById('orders-total-count').textContent = orders.length;
+            document.getElementById('orders-completed').textContent = completed;
+            document.getElementById('orders-total-revenue').textContent = '$' + totalRev.toFixed(2);
+
+            if (orders.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 40px; color: var(--muted);"><i class="fa-solid fa-receipt" style="font-size: 32px; display: block; margin-bottom: 15px; opacity: 0.5;"></i>No hay órdenes de compra aún</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = orders.slice().reverse().map(order => {
+                const paymentIcons = {
+                    card: '<i class="fa-solid fa-credit-card" style="color: var(--neon-blue);"></i> Tarjeta',
+                    paypal: '<i class="fa-brands fa-paypal" style="color: #0070ba;"></i> PayPal',
+                    crypto: '<i class="fa-brands fa-bitcoin" style="color: #f7931a;"></i> Cripto'
+                };
+
+                const statusColors = {
+                    completed: 'tag-green',
+                    pending: '',
+                    failed: 'tag-red'
+                };
+
+                return `<tr>
+                    <td><strong style="color: var(--neon-purple);">#${order.id}</strong></td>
+                    <td>${order.customer || 'N/A'}</td>
+                    <td style="font-size: 12px; color: var(--muted);">${order.email || 'N/A'}</td>
+                    <td>${order.items || 0} item(s)</td>
+                    <td style="color: var(--neon-green); font-weight: 700;">$${(order.total || 0).toFixed(2)}</td>
+                    <td>${paymentIcons[order.paymentMethod] || order.paymentMethod}</td>
+                    <td><span class="tag ${statusColors[order.status] || ''}">${order.status === 'completed' ? '✅ Completada' : order.status}</span></td>
+                    <td style="font-size: 12px; color: var(--muted);">${order.date || 'N/A'}</td>
+                    <td>
+                        <button class="btn btn-outline" onclick="viewOrderDetails(${order.id})" style="padding: 8px 12px; font-size: 12px;">
+                            <i class="fa-solid fa-eye"></i>
+                        </button>
+                        <button class="btn btn-danger" onclick="deleteOrder(${order.id})" style="padding: 8px 12px; font-size: 12px;">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function viewOrderDetails(orderId) {
+            const orders = JSON.parse(localStorage.getItem('beaststore_orders')) || [];
+            const order = orders.find(o => o.id === orderId);
+            if (!order) return;
+
+            alert(`📋 DETALLE DE ORDEN #${order.id}\n\n👤 Cliente: ${order.customer || 'N/A'}\n📧 Email: ${order.email || 'N/A'}\n💰 Total: $${(order.total || 0).toFixed(2)}\n💳 Método: ${order.paymentMethod || 'N/A'}\n📅 Fecha: ${order.date || 'N/A'}\n📦 Items: ${order.items || 0}\n📊 Estado: ${order.status || 'N/A'}`);
+        }
+
+        function deleteOrder(id) {
+            if (!confirm('¿Eliminar esta orden?')) return;
+            let orders = JSON.parse(localStorage.getItem('beaststore_orders')) || [];
+            orders = orders.filter(o => o.id !== id);
+            localStorage.setItem('beaststore_orders', JSON.stringify(orders));
+            loadOrders();
+            loadStats();
+            showToast('Orden eliminada', 'info');
+        }
+
+function clearForm() {
+            document.getElementById('beat-title').value = '';
+            document.getElementById('beat-artist').value = '';
+            document.getElementById('beat-bpm').value = '';
+            document.getElementById('beat-price').value = '';
+            document.getElementById('beat-genre').selectedIndex = 0;
+            document.getElementById('beat-key').selectedIndex = 0;
+
+            uploadedAudio = null;
+            uploadedCover = null;
+
+            // Reset audio upload UI
+            const audioZone = document.getElementById('audio-dropzone');
+            audioZone.classList.remove('has-file');
+            document.getElementById('audio-icon').className = 'fa-solid fa-file-audio';
+            document.getElementById('audio-title').textContent = 'Arrastra o selecciona archivo WAV';
+            document.getElementById('audio-desc').textContent = 'Formato: WAV, MP3 | Máx: 50MB';
+            document.getElementById('audio-preview').classList.remove('active');
+            document.getElementById('preview-player').src = '';
+
+            // Reset cover upload UI
+            const coverZone = document.getElementById('cover-dropzone');
+            coverZone.classList.remove('has-file');
+            document.getElementById('cover-icon').className = 'fa-solid fa-image';
+            document.getElementById('cover-title').textContent = 'Arrastra o selecciona imagen';
+            document.getElementById('cover-desc').textContent = 'JPG, PNG | Mín: 400x400px';
+            document.getElementById('cover-preview').style.display = 'none';
+            document.getElementById('cover-img').src = '';
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast ' + type;
+            const icons = { success: 'fa-circle-check', error: 'fa-circle-xmark', info: 'fa-circle-info' };
+            toast.innerHTML = `<i class="fa-solid ${icons[type] || icons.info}"></i><span style="font-size: 14px; font-weight: 600;">${message}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateX(100px)'; setTimeout(() => toast.remove(), 300); }, 3000);
+        }
+
+        // Init
+        if (localStorage.getItem('beaststore_admin') === 'true') {
+            loadBeats();
+            loadStats();
+            loadOrders();
+            loadCustomers();
+            initCharts();
+            checkNewOrders();
+        }
+    </script>
+</body>
+</html>
